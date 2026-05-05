@@ -1,0 +1,154 @@
+using System;
+using System.Data;
+using System.Data.SQLite;
+using System.IO;
+using System.Text;
+
+namespace Lesson5_DataTableHomework;
+
+internal class Program
+{
+    private static readonly string DbPath = Path.Combine(AppContext.BaseDirectory, "departments_manager.db");
+    private static readonly string ConnectionString = $"Data Source={DbPath};Version=3;";
+
+    static void Main()
+    {
+        Console.OutputEncoding = Encoding.UTF8;
+        Console.WriteLine($"Файл базы данных: {DbPath}\n");
+
+        try
+        {
+            EnsureDatabase();
+
+            using var connection = new SQLiteConnection(ConnectionString);
+            connection.Open();
+
+            using var adapter = CreateAdapter(connection);
+            DataTable table = LoadDepartments(adapter);
+
+            ShowTable(table, "ИСХОДНЫЕ ДАННЫЕ (ПОСЛЕ ЗАГРУЗКИ)");
+
+            RenameDepartment(table, 1, "IT (Обновлено)");
+            AddDepartment(table, "Маркетинг");
+            DeleteDepartment(table, 3);
+
+            ShowTable(table, "ЛОКАЛЬНЫЕ ИЗМЕНЕНИЯ (ДО СОХРАНЕНИЯ)");
+
+            SaveChanges(adapter, table);
+
+            DataTable reloadedTable = ReloadDepartments();
+            ShowTable(reloadedTable, "ИТОГОВЫЙ РЕЗУЛЬТАТ (ПОВТОРНАЯ ЗАГРУЗКА)");
+
+            PrintConclusion();
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Ошибка: {ex.Message}");
+        }
+    }
+
+    static void EnsureDatabase()
+    {
+        using var connection = new SQLiteConnection(ConnectionString);
+        connection.Open();
+
+        using var command = connection.CreateCommand();
+        command.CommandText = @"
+            CREATE TABLE IF NOT EXISTS Departments (
+                Id INTEGER PRIMARY KEY AUTOINCREMENT,
+                Name TEXT NOT NULL UNIQUE
+            );";
+        command.ExecuteNonQuery();
+
+        command.CommandText = "SELECT COUNT(*) FROM Departments;";
+        long count = (long)command.ExecuteScalar();
+
+        if (count == 0)
+        {
+            command.CommandText = @"
+                INSERT INTO Departments (Name) VALUES 
+                ('IT'), ('Бухгалтерия'), ('HR'), ('Склад'), ('Продажи');";
+            command.ExecuteNonQuery();
+        }
+    }
+
+    static SQLiteDataAdapter CreateAdapter(SQLiteConnection connection)
+    {
+        var adapter = new SQLiteDataAdapter("SELECT Id, Name FROM Departments ORDER BY Id", connection);
+        adapter.MissingSchemaAction = MissingSchemaAction.AddWithKey;
+        return adapter;
+    }
+
+    static DataTable LoadDepartments(SQLiteDataAdapter adapter)
+    {
+        DataTable table = new DataTable("Departments");
+        adapter.Fill(table);
+        return table;
+    }
+
+    static void ShowTable(DataTable table, string title)
+    {
+        Console.WriteLine(new string('-', 60));
+        Console.WriteLine(title);
+        Console.WriteLine(new string('-', 60));
+        Console.WriteLine($"{"Id",-5} | {"Name",-25} | {"RowState",-15}");
+        Console.WriteLine(new string('-', 60));
+
+        foreach (DataRow row in table.Rows)
+        {
+            if (row.RowState == DataRowState.Deleted)
+            {
+                Console.WriteLine($"{row["Id", DataRowVersion.Original],-5} | {"[DELETED]",-25} | {row.RowState,-15}");
+            }
+            else
+            {
+                Console.WriteLine($"{row["Id"],-5} | {row["Name"],-25} | {row.RowState,-15}");
+            }
+        }
+        Console.WriteLine();
+    }
+
+    static void RenameDepartment(DataTable table, int id, string newName)
+    {
+        DataRow row = table.Rows.Find(id);
+        if (row != null)
+        {
+            row["Name"] = newName;
+        }
+    }
+
+    static void AddDepartment(DataTable table, string name)
+    {
+        DataRow row = table.NewRow();
+        row["Name"] = name;
+        table.Rows.Add(row);
+    }
+
+    static void DeleteDepartment(DataTable table, int id)
+    {
+        DataRow row = table.Rows.Find(id);
+        row?.Delete();
+    }
+
+    static void SaveChanges(SQLiteDataAdapter adapter, DataTable table)
+    {
+        using var builder = new SQLiteCommandBuilder(adapter);
+        int affectedRows = adapter.Update(table);
+        Console.WriteLine($"Обработано строк при сохранении: {affectedRows}\n");
+    }
+
+    static DataTable ReloadDepartments()
+    {
+        using var connection = new SQLiteConnection(ConnectionString);
+        connection.Open();
+        using var adapter = CreateAdapter(connection);
+        return LoadDepartments(adapter);
+    }
+
+    static void PrintConclusion()
+    {
+        Console.WriteLine("ВЫВОД:");
+        Console.WriteLine("Подход DataTable + CommandBuilder идеален для простых CRUD-операций с одиночными таблицами и в небольших десктопных утилитах.");
+        Console.WriteLine("Для крупных проектов со сложными связями, валидацией и бизнес-логикой лучше использовать EF Core из-за строгой типизации и удобства поддержки.");
+    }
+}
