@@ -1,0 +1,105 @@
+using Microsoft.Data.Sqlite;
+using System;
+using System.IO;
+using System.Text;
+
+namespace Lesson3_Homework;
+
+internal class Program
+{
+    private static readonly string DbPath = 
+        Path.Combine(AppContext.BaseDirectory, "contacts_report.db");
+
+    private static readonly string ConnectionString = 
+        $"Data Source={DbPath}";
+
+    static void Main()
+    {
+        Console.OutputEncoding = Encoding.UTF8;
+
+        Console.WriteLine($"Путь к базе данных: {DbPath}");
+        Console.WriteLine(new string('-', 50));
+
+        EnsureDatabase();
+
+        ShowReport();
+    }
+
+    static void EnsureDatabase()
+    {
+        using var connection = new SqliteConnection(ConnectionString);
+        connection.Open();
+
+        using var createTableCommand = connection.CreateCommand();
+        createTableCommand.CommandText = @"
+        CREATE TABLE IF NOT EXISTS Contacts
+        (
+            Id INTEGER PRIMARY KEY AUTOINCREMENT,
+            FullName TEXT NOT NULL,
+            Phone TEXT,
+            Email TEXT,
+            Department TEXT
+        );";
+        createTableCommand.ExecuteNonQuery();
+
+        using var countCommand = connection.CreateCommand();
+        countCommand.CommandText = "SELECT COUNT(*) FROM Contacts;";
+        int currentCount = Convert.ToInt32(countCommand.ExecuteScalar());
+
+        if (currentCount == 0)
+        {
+            using var insertCommand = connection.CreateCommand();
+            insertCommand.CommandText = @"
+            INSERT INTO Contacts (FullName, Phone, Email, Department)
+            VALUES
+                ('Алексей Иванов', '+7-900-111-22-33', 'alex@it.ru', 'IT'),
+                ('Елена Петрова', '+7-900-444-55-66', NULL, 'IT'),
+                ('Иван Сидоров', NULL, 'sidorov@sales.ru', 'Sales'),
+                ('Анна Кузнецова', '+7-900-777-88-99', 'anna@hr.ru', 'HR'),
+                ('Дмитрий Соколов', '+7-900-000-00-00', 'dmitry@it.ru', 'IT'),
+                ('Ольга Морозова', NULL, NULL, 'Sales');";
+            insertCommand.ExecuteNonQuery();
+        }
+    }
+
+    static void ShowReport()
+    {
+        int total = ExecuteScalarInt("SELECT COUNT(*) FROM Contacts;");
+        int withEmail = ExecuteScalarInt("SELECT COUNT(*) FROM Contacts WHERE Email IS NOT NULL;");
+        int withoutPhone = ExecuteScalarInt("SELECT COUNT(*) FROM Contacts WHERE Phone IS NULL;");
+        int itDepartment = ExecuteScalarInt("SELECT COUNT(*) FROM Contacts WHERE Department = 'IT';");
+        int uniqueDepartments = ExecuteScalarInt("SELECT COUNT(DISTINCT Department) FROM Contacts;");
+        int maxId = ExecuteScalarInt("SELECT MAX(Id) FROM Contacts;");
+        string firstContact = ExecuteScalarString("SELECT FullName FROM Contacts ORDER BY FullName LIMIT 1;");
+
+        Console.WriteLine($"Общее количество контактов: {total}");
+        Console.WriteLine($"Количество контактов с e-mail: {withEmail}");
+        Console.WriteLine($"Количество контактов без телефона: {withoutPhone}");
+        Console.WriteLine($"Количество контактов отдела IT: {itDepartment}");
+        Console.WriteLine($"Количество различных отделов: {uniqueDepartments}");
+        Console.WriteLine($"Максимальный Id в таблице: {maxId}");
+        Console.WriteLine($"Имя первого контакта по алфавиту: {firstContact}");
+    }
+
+    static int ExecuteScalarInt(string sql)
+    {
+        using var connection = new SqliteConnection(ConnectionString);
+        connection.Open();
+        using var command = connection.CreateCommand();
+        command.CommandText = sql;
+        object? result = command.ExecuteScalar();
+
+        return (result == null || result == DBNull.Value) ? 0 : Convert.ToInt32(result);
+    }
+
+    static string ExecuteScalarString(string sql)
+    {
+        using var connection = new SqliteConnection(ConnectionString);
+        connection.Open();
+        using var command = connection.CreateCommand();
+        command.CommandText = sql;
+        object? result = command.ExecuteScalar();
+
+        return (result == null || result == DBNull.Value) ? "Нет данных" : Convert.ToString(result)!;
+    }
+}
