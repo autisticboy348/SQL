@@ -1,0 +1,179 @@
+using Microsoft.Data.Sqlite;
+using System;
+using System.Collections.Generic;
+using System.IO;
+using System.Text;
+
+namespace Lesson4_ReaderHomework;
+
+public class Contact
+{
+    public int Id { get; set; }
+    public required string FullName { get; set; }
+    public string? Phone { get; set; }
+    public string? Email { get; set; }
+    public string? Department { get; set; }
+}
+
+internal class Program
+{
+    private static readonly string DbPath = 
+        Path.Combine(AppContext.BaseDirectory, "contacts_v2.db");
+
+    private static readonly string ConnectionString = 
+        $"Data Source={DbPath}";
+
+    static void Main()
+    {
+        Console.OutputEncoding = Encoding.UTF8;
+
+        Console.WriteLine($"Файл базы данных: {DbPath}");
+        Console.WriteLine(new string('=', 50));
+
+        EnsureDatabase();
+
+        Console.WriteLine("\n--- Весь список контактов ---");
+        PrintContacts(GetAllContacts());
+
+        Console.WriteLine("\n--- Только отдел IT ---");
+        PrintContacts(GetContactsByDepartment("IT"));
+
+        Console.WriteLine("\n--- Поиск контакта по ID (например, 3) ---");
+        PrintContact(GetContactById(3));
+
+        Console.WriteLine("\n--- Контакты без E-mail ---");
+        PrintContacts(GetContactsWithoutEmail());
+    }
+
+    static void EnsureDatabase()
+    {
+        using var connection = new SqliteConnection(ConnectionString);
+        connection.Open();
+
+        using var createTableCommand = connection.CreateCommand();
+        createTableCommand.CommandText = @"
+        CREATE TABLE IF NOT EXISTS Contacts
+        (
+            Id INTEGER PRIMARY KEY AUTOINCREMENT,
+            FullName TEXT NOT NULL,
+            Phone TEXT,
+            Email TEXT,
+            Department TEXT
+        );";
+        createTableCommand.ExecuteNonQuery();
+
+        using var checkCommand = connection.CreateCommand();
+        checkCommand.CommandText = "SELECT COUNT(*) FROM Contacts;";
+        long count = (long)(checkCommand.ExecuteScalar() ?? 0);
+
+        if (count == 0)
+        {
+            using var insertCommand = connection.CreateCommand();
+            insertCommand.CommandText = @"
+            INSERT INTO Contacts (FullName, Phone, Email, Department)
+            VALUES
+                ('Алексей Иванов', '+7-900-111-22-33', 'alex@it.ru', 'IT'),
+                ('Елена Петрова', '+7-900-444-55-66', NULL, 'IT'),
+                ('Иван Сидоров', NULL, 'sidorov@sales.ru', 'Sales'),
+                ('Анна Кузнецова', '+7-900-777-88-99', 'anna@hr.ru', 'HR'),
+                ('Дмитрий Соколов', '+7-900-000-00-00', 'dmitry@it.ru', 'IT'),
+                ('Мария Орлова', '+7-900-222-33-44', 'maria@office.ru', NULL),
+                ('Сергей Волков', '+7-911-555-66-77', 'volkov@hr.ru', 'HR'),
+                ('Инна Белова', '+7-922-888-99-00', 'inna@sales.ru', 'Sales');";
+            insertCommand.ExecuteNonQuery();
+        }
+    }
+
+    static List<Contact> GetAllContacts()
+    {
+        const string sql = "SELECT Id, FullName, Phone, Email, Department FROM Contacts";
+        return GetContactsInternal(sql);
+    }
+
+    static List<Contact> GetContactsByDepartment(string department)
+    {
+        const string sql = "SELECT Id, FullName, Phone, Email, Department FROM Contacts WHERE Department = $dept";
+        return GetContactsInternal(sql, new SqliteParameter("$dept", department));
+    }
+
+    static List<Contact> GetContactsWithoutEmail()
+    {
+        const string sql = "SELECT Id, FullName, Phone, Email, Department FROM Contacts WHERE Email IS NULL";
+        return GetContactsInternal(sql);
+    }
+
+    static Contact? GetContactById(int id)
+    {
+        using var connection = new SqliteConnection(ConnectionString);
+        connection.Open();
+
+        using var command = connection.CreateCommand();
+        command.CommandText = "SELECT Id, FullName, Phone, Email, Department FROM Contacts WHERE Id = $id";
+        command.Parameters.AddWithValue("$id", id);
+
+        using var reader = command.ExecuteReader();
+
+        if (reader.Read())
+        {
+            return MapReaderToContact(reader);
+        }
+
+        return null;
+    }
+
+    private static List<Contact> GetContactsInternal(string sql, SqliteParameter? parameter = null)
+    {
+        var contacts = new List<Contact>();
+
+        using var connection = new SqliteConnection(ConnectionString);
+        connection.Open();
+
+        using var command = connection.CreateCommand();
+        command.CommandText = sql;
+        if (parameter != null) command.Parameters.Add(parameter);
+
+        using var reader = command.ExecuteReader();
+
+        while (reader.Read())
+        {
+            contacts.Add(MapReaderToContact(reader));
+        }
+
+        return contacts;
+    }
+
+    private static Contact MapReaderToContact(SqliteDataReader reader)
+    {
+        return new Contact
+        {
+            Id = reader.GetInt32(0),
+            FullName = reader.GetString(1),
+            Phone = reader.IsDBNull(2) ? null : reader.GetString(2),
+            Email = reader.IsDBNull(3) ? null : reader.GetString(3),
+            Department = reader.IsDBNull(4) ? null : reader.GetString(4)
+        };
+    }
+
+    static void PrintContacts(IEnumerable<Contact> contacts)
+    {
+        foreach (var contact in contacts)
+        {
+            PrintContact(contact);
+        }
+    }
+
+    static void PrintContact(Contact? contact)
+    {
+        if (contact == null)
+        {
+            Console.WriteLine("Запись не найдена.");
+            return;
+        }
+
+        string phone = contact.Phone ?? "<нет телефона>";
+        string email = contact.Email ?? "<нет почты>";
+        string dept = contact.Department ?? "<без отдела>";
+
+        Console.WriteLine($"{contact.Id} | {contact.FullName} | {phone} | {email} | {dept}");
+    }
+}
