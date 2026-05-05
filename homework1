@@ -1,0 +1,33 @@
+DROP TABLE IF EXISTS Books;
+DROP TABLE IF EXISTS Genres;
+
+CREATE TABLE Genres (
+    Id INTEGER PRIMARY KEY AUTOINCREMENT,
+    Name TEXT NOT NULL UNIQUE
+);
+CREATE TABLE Books (
+    Id INTEGER PRIMARY KEY AUTOINCREMENT,
+    Title TEXT NOT NULL,
+    Author TEXT,
+    Price REAL,
+    GenreId INTEGER,
+    FOREIGN KEY (GenreId) REFERENCES Genres(Id) ON DELETE SET NULL
+);
+
+INSERT INTO Genres (Name) VALUES ('Программирование');
+INSERT INTO Genres (Name) VALUES ('Фантастика');
+
+-- (Используем подзапросы для получения Id жанра по его названию)
+INSERT INTO Books (Title, Author, Price, GenreId) 
+VALUES ('C# in Depth', 'Jon Skeet', 1200.00, (SELECT Id FROM Genres WHERE Name = 'Программирование'));
+
+INSERT INTO Books (Title, Author, Price, GenreId) 
+VALUES ('Дюна', 'Фрэнк Герберт', 850.50, (SELECT Id FROM Genres WHERE Name = 'Фантастика'));
+
+-- Обновление цены книги с ID 1
+UPDATE Books 
+SET Price = 1350.00 
+WHERE Id = 1;   
+SELECT Books.Id, Books.Title, Books.Price, Genres.Name AS Genre
+FROM Books
+LEFT JOIN Genres ON Books.GenreId = Genres.Id;
