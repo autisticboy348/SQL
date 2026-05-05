@@ -1,0 +1,46 @@
+SELECT * FROM Departments;
+SELECT FullName, Email FROM Contacts;
+SELECT Title, Author, Price FROM Books;
+SELECT * FROM Genres;
+SELECT Id, FullName FROM Authors;
+
+SELECT FullName AS Employee_Name, Email AS Contact_Info FROM Contacts;
+SELECT FullName, (Salary * 6) AS Half_Year_Income FROM Employees;
+SELECT Name AS Genre_Title FROM Genres;
+SELECT c.* FROM Contacts AS c;
+SELECT * FROM Contacts WHERE Email IS NULL;
+SELECT * FROM Contacts WHERE Email IS NOT NULL;
+
+SELECT * FROM Contacts WHERE FullName LIKE 'А%';
+SELECT * FROM Contacts WHERE Email LIKE '%@mail.ru';
+
+SELECT * FROM Contacts LIMIT 2 OFFSET 0;
+SELECT * FROM Contacts LIMIT 2 OFFSET 2;
+SELECT * FROM Contacts LIMIT 5 OFFSET 10;
+
+SELECT c.FullName, d.Name 
+FROM Contacts AS c
+JOIN Departments AS d ON c.DepartmentId = d.Id;
+SELECT c.FullName, d.Name 
+FROM Contacts AS c
+LEFT JOIN Departments AS d ON c.DepartmentId = d.Id;
+
+SELECT * FROM TShirt_Colors CROSS JOIN TShirt_Sizes;
+
+SELECT 
+    COUNT(*) AS Total_Employees, 
+    AVG(Salary) AS Average_Salary, 
+    MIN(Salary) AS Min_Salary, 
+    MAX(Salary) AS Max_Salary 
+FROM Employees;
+
+SELECT DepartmentId, COUNT(*) FROM Contacts GROUP BY DepartmentId;
+SELECT COUNT(DISTINCT FullName) FROM Contacts;
+
+SELECT d.Name, AVG(e.Salary) AS Avg_Salary
+FROM Departments d
+JOIN Employees e ON d.Id = e.DepartmentId
+GROUP BY d.Name
+HAVING AVG(e.Salary) > 40000;
+
+SELECT FullName AS Name FROM Contacts WHERE FullName LIKE 'А%';
